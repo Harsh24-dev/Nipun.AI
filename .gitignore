@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+*.so
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.log
+
+# uv
+.uv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.turbo/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Models (large binary files — download separately)
+backend/models/
+
+# DB data (local docker volumes, never commit)
+postgres_data/
+redis_data/
+qdrant_data/
+es_data/
+
+# Secrets / keys
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+
+# Monitoring local data
+monitoring/grafana/data/
+monitoring/prometheus/data/
+
+# Local Docker data (bind-mounted DB/vector/search data — never commit)
+backend/backend/*
+backend\backend/*
+logs/*
+data/*
+backend/models/*

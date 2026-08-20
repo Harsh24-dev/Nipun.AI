@@ -1,0 +1,190 @@
+# Nipun.AI — Docker Compose (Infrastructure Services)
+#
+# This file runs ONLY the infrastructure (databases, search, monitoring).
+# Backend and frontend run natively via: make backend / make frontend
+#
+# Usage:
+#   make infra        → start databases only
+#   make infra-full   → start everything including monitoring
+#   make infra-down   → stop everything
+
+networks:
+  nipun-net:
+    driver: bridge
+
+# All service data is bind-mounted into ./data/<service> so it lives in the repo root,
+# persists across restarts, and can be reset by simply deleting the ./data folder.
+# (No named Docker volumes — see each service's `volumes:` below.)
+# NOTE (Windows/OneDrive): exclude ./data from OneDrive sync — OneDrive locking DB files
+# mid-write can corrupt Postgres/ES. It is already in .gitignore and .dockerignore.
+
+services:
+
+  # ── PostgreSQL 16 with pgvector ─────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: nipun-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nipun_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-nipun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./infrastructure/scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nipun} -d ${POSTGRES_DB:-nipun_ai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - nipun-net
+
+  # ── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nipun-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - nipun-net
+
+  # ── Qdrant (vector database) ────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: nipun-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"    # HTTP / REST API
+      - "6334:6334"                     # gRPC
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: INFO
+    healthcheck:
+      # Qdrant image ships no curl/wget; bash supports /dev/tcp for a TCP liveness check.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/6333"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - nipun-net
+
+  # ── Elasticsearch 8 (exact-match: section numbers, case IDs) ───────────────
+  elasticsearch:
+    image: elasticsearch:8.16.0
+    container_name: nipun-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"   # dev only — enable in prod
+      ES_JAVA_OPTS: "-Xms512m -Xmx1g"
+      ELASTIC_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health?wait_for_status=yellow || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nipun-net
+
+  # ── Neo4j (knowledge graph — Phase 4 GraphRAG) ─────────────────────────────
+  neo4j:
+    image: neo4j:5.25-community
+    container_name: nipun-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD:-changeme-neo4j}"
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - ./data/neo4j:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    networks:
+      - nipun-net
+
+  # ── Prometheus (metrics collection) ────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: nipun-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./data/prometheus:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nipun-net
+    profiles:
+      - monitoring
+
+  # ── Grafana (dashboards) ────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: nipun-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nipun-net
+    profiles:
+      - monitoring

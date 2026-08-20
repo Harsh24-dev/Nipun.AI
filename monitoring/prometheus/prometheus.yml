@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: nipun-ai
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: "nipun-backend"
+    static_configs:
+      - targets: ["host.docker.internal:8000"]   # FastAPI /metrics
+    metrics_path: /metrics
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+
+  - job_name: "qdrant"
+    static_configs:
+      - targets: ["qdrant:6333"]
+    metrics_path: /metrics
+
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:9187"]   # postgres_exporter if deployed
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

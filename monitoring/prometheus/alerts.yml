@@ -1,0 +1,43 @@
+groups:
+  - name: nipun-ai-alerts
+    rules:
+
+      - alert: HighLatencyP99
+        expr: histogram_quantile(0.99, rate(nipun_request_duration_ms_bucket[5m])) > 3000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "p99 latency > 3s for 5 minutes"
+
+      - alert: HighErrorRate
+        expr: rate(nipun_errors_total[2m]) / rate(nipun_queries_total[2m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate > 5%"
+
+      - alert: HighQueueDepth
+        expr: nipun_queue_depth > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery queue depth > 1000 for 10 minutes"
+
+      - alert: LLMErrors
+        expr: rate(nipun_llm_errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM error rate elevated"
+
+      - alert: SlowRetrieval
+        expr: histogram_quantile(0.95, rate(nipun_retrieval_duration_ms_bucket{stage="total"}[5m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Retrieval p95 > 500ms"

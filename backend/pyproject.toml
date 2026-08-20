@@ -1,0 +1,122 @@
+[project]
+name = "nipun-ai-backend"
+version = "0.1.0"
+description = "Nipun.AI — India-first multilingual AI assistant backend"
+requires-python = ">=3.12"
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.17",
+    "websockets>=13.0",
+    # Config & validation
+    "pydantic[email]>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.0",
+    # LLM — unified multi-provider client
+    "litellm>=1.52.0",
+    # Agent orchestration
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    # Embeddings (BGE-M3 — best for Indian languages)
+    "FlagEmbedding>=1.3.0",
+    "torch>=2.4.0",                 # required by FlagEmbedding
+    "transformers>=4.46.0",
+    # Database — Postgres async
+    "asyncpg>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "pgvector>=0.3.0",
+    "alembic>=1.14.0",
+    # Database — Redis async
+    "redis[hiredis]>=5.2.0",
+    # Database — Qdrant vector DB
+    "qdrant-client>=1.12.0",
+    # Database — Elasticsearch (exact match)
+    # Must stay on the 8.x line to match the Elasticsearch 8.16 server — a 9.x client
+    # sends a `compatible-with=9` Accept header the 8.x server rejects with HTTP 400.
+    "elasticsearch[async]>=8.16.0,<9",
+    # Database — Neo4j knowledge graph (GraphRAG; import is guarded/optional)
+    "neo4j>=5.25.0",
+    # Async task queue
+    "celery[redis]>=5.4.0",
+    # Language detection
+    "lingua-language-detector>=2.0.0",
+    # Deliverable generation — downloadable slide decks / documents with charts + images.
+    # Imported lazily in src/synthesis/filegen.py, so the app still runs if these are absent;
+    # they are required to actually produce .pptx/.docx files.
+    "python-pptx>=1.0.0",
+    "python-docx>=1.1.0",
+    "matplotlib>=3.9.0",
+    "Pillow>=10.4.0",
+    # YouTube transcripts — used as grounding + citations for learning answers (keyless).
+    "youtube-transcript-api>=0.6.2",
+    # IPA browser agent — Playwright drives a real browser to EXECUTE web tasks (set-of-marks
+    # perception + agent loop). Imported lazily in src/ipa/*, so the app still runs if it is not
+    # installed; run `playwright install chromium` once to fetch the browser binary.
+    "playwright>=1.48.0",
+    # Logging & observability
+    "structlog>=24.4.0",
+    "prometheus-fastapi-instrumentator>=7.0.0",
+    "prometheus-client>=0.21.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-exporter-otlp>=1.28.0",
+    # Resilience
+    "tenacity>=9.0.0",
+    "cachetools>=5.5.0",
+    # Auth
+    "python-jose[cryptography]>=3.3.0",
+    # HTTP client
+    "httpx>=0.27.0",
+    "aiofiles>=24.1.0",
+    # Document parsing (ingestion pipeline)
+    "pypdf>=5.0.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.3.0",
+    # Utilities
+    "orjson>=3.10.0",
+    "python-slugify>=8.0.0",
+    "bcrypt>=5.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.27.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "factory-boy>=3.3.0",
+    "faker>=30.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["B008"]   # FastAPI uses function calls in defaults
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true

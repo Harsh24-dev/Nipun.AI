@@ -1,0 +1,10 @@
+# Never send local data / logs / VCS into the Docker build context.
+/data/
+**/logs/
+.git/
+.venv/
+**/__pycache__/
+**/*.pyc
+node_modules/
+*.env
+.env
